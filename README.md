@@ -9,14 +9,13 @@ Se propone un modelo conceptual para Tajinaste S.A. que permite consultar las ex
 ## Archivos del modelo
 
 - [Modelo editable en Draw.io](modelo/modelo_viveros.drawio): cuatro páginas del mismo modelo. La primera incluye todas las entidades, relaciones y atributos; las otras tres amplían sus áreas.
-- [Modelo completo en PNG](modelo/modelo_viveros.png): **11 entidades, 10 relaciones, una especialización parcial y 37 atributos**.
+- [Modelo completo en PNG](modelo/modelo_viveros.png)
 - [Viveros y existencias](modelo/viveros_stock.png).
 - [Historial de puestos y objetivos](modelo/historial_productividad.png).
 - [Pedidos y fidelización](modelo/pedidos_fidelizacion.png).
 
 ![Modelo entidad/relación completo](modelo/modelo_viveros.png)
 
-Para editar, abrir `modelo/modelo_viveros.drawio` desde **Archivo → Abrir desde → Dispositivo** en Draw.io. Las formas, los atributos y las conexiones son editables; las páginas de detalle amplían las entidades de la vista general, no crean entidades adicionales.
 
 ## Notación y alcance
 
@@ -182,79 +181,10 @@ Las cardinalidades se expresan **por instancia de la entidad nombrada en cada co
 
 Las demás relaciones no tienen atributos propios. Las fechas pertenecen a `PUESTO`, las metas a `OBJETIVO_VENTA` y las bonificaciones a `BONIFICACION_MENSUAL`.
 
-## 3. Restricciones semánticas
 
-Además de las cardinalidades, se aplican las siguientes restricciones:
+## 3. Decisiones de la revisión
 
-1. **Pertenencia territorial.** Toda zona pertenece a exactamente un vivero. La zona del puesto determina el vivero en el que trabaja el empleado durante su intervalo.
-2. **Existencias por pareja.** Solo existe un registro de `ALMACENA` por pareja `(zona, producto)`. Las unidades disponibles nunca son negativas. La ausencia de la pareja significa que el producto no está asignado a esa zona; una pareja con valor cero sí conserva la asignación.
-3. **Intervalos históricos.** Un puesto es válido en `[fecha_inicio, fecha_fin)`. Si existe fecha de fin, debe ser posterior a la de inicio. Una fecha de fin vacía equivale a un extremo final abierto. Se pueden encadenar dos puestos cuando el segundo empieza exactamente al terminar el primero.
-4. **Un único vivero a la vez.** Para dos puestos del mismo empleado que pertenecen a viveros distintos, sus intervalos no pueden solaparse. Las cardinalidades por sí solas no expresan esta regla temporal. No se prohíben tareas concurrentes dentro del mismo vivero, porque el enunciado solo prohíbe dos destinos simultáneos; cada tarea se registra mediante su puesto.
-5. **Conservación del historial.** Un cambio de zona o tarea produce un nuevo puesto. Los datos de empleado, zona y tarea de un puesto con actividad registrada no se sobrescriben, ni se eliminan puestos referenciados por pedidos. Los objetivos conservan su asociación al empleado, independientemente de sus cambios de puesto.
-6. **Responsabilidad única y vigente.** Todo pedido se vincula a exactamente un puesto. Su fecha debe estar dentro del intervalo de ese puesto. El empleado de ese puesto es su único responsable, también cuando después cambia de vivero.
-7. **Contenido del pedido.** Un pedido contiene al menos una línea. Cada producto aparece como máximo una vez por pedido; si se compran varias unidades, se expresa en `cantidad`. Cantidades e importes cumplen los dominios indicados. El total se deriva de las líneas y no puede modificarse de forma independiente.
-8. **Especialización e ingreso en Tajinaste Plus.** Una instancia de `CLIENTE_PLUS` debe corresponder a un `CLIENTE` con el mismo identificador. Se pueden conservar pedidos anteriores a su ingreso, pero el historial del programa, su volumen mensual y sus bonificaciones solo incluyen pedidos con fecha igual o posterior a `fecha_ingreso`. Los clientes que no están en el subtipo no reciben bonificaciones.
-9. **Bonificación mensual única.** La pareja `(cliente, periodo)` es única. El mes de la bonificación debe ser el mes de ingreso o uno posterior; durante el mes de ingreso solo cuentan compras desde la fecha y hora de alta. Un mes puede todavía no tener bonificación concedida, por eso la participación del cliente es `(0,N)`.
-10. **Objetivos comparables.** `desde < hasta` y el importe objetivo es positivo. Se adopta un único objetivo monetario activo por empleado en cada instante: sus intervalos no se solapan. Un objetivo puede abarcar puestos sucesivos en distintos viveros. Las ventas computables son los pedidos que gestiona ese empleado dentro de `[desde,hasta)`, obtenidos a través de cualquiera de sus puestos históricos.
-11. **Atribución de productividad.** Un pedido se cuenta una sola vez, para el empleado y la zona del puesto gestor. La zona a la que se atribuye la venta es la zona de trabajo del responsable; no se presupone que sea la zona de la que físicamente se retira el producto.
-
-Los mínimos elegidos incluyen dos supuestos explícitos: todo vivero registrado dispone de al menos una zona y todo pedido registrado está completo, con al menos una línea. `OBJETIVO_VENTA`, su alcance sobre las ventas registradas y la atribución histórica a zona concretan cómo se medirá la productividad. Las bonificaciones se conservan por meses, sin inventar la política comercial.
-
-## 4. Información que permite obtener el modelo
-
-| Consulta necesaria | Datos utilizados |
-| --- | --- |
-| Existencias de un producto en una zona | `ALMACENA.unidades_disponibles`. |
-| Existencias de un producto en un vivero | Suma de las existencias de todas las zonas de ese vivero. |
-| Localización de un vivero o una zona | Atributos de latitud y longitud de la entidad correspondiente. |
-| Dónde trabajaba un empleado en una fecha | Puestos del empleado cuyo intervalo contenga la fecha → zona → vivero. |
-| Qué tarea realizaba en esa zona | Tarea asociada a cada puesto vigente. |
-| Historial de compras desde el ingreso | Pedidos del cliente que está en `CLIENTE_PLUS`, filtrados por `fecha >= fecha_ingreso` y ordenados por fecha. |
-| Volumen mensual de compras Plus | Suma de los totales de los pedidos del cliente en el mes, excluyendo compras anteriores a su ingreso. |
-| Bonificación concedida | Bonificación del cliente identificada por el mes. |
-| Responsable de un pedido | Pedido → puesto → empleado, con una única instancia en cada paso. |
-| Ventas gestionadas por empleado o zona en un periodo | Suma de los totales de los pedidos, agrupando por empleado o zona del puesto histórico. |
-| Cumplimiento de un objetivo | Ventas del empleado dentro de `[desde,hasta)` divididas por `importe_objetivo`, multiplicadas por 100, aunque haya cambiado de puesto durante ese periodo. |
-
-Para un objetivo individual, el numerador incluye los pedidos gestionados por ese empleado en el intervalo del objetivo, con independencia del puesto sucesivo desde el que los gestionó. Las ventas por zona se calculan mediante el puesto de cada pedido. El modelo no atribuye arbitrariamente a una zona el objetivo entero de un empleado que trabajó en varias: los objetivos son de empleados y los resultados por zona son volúmenes de venta.
-
-## 5. Ejemplos de comprobación
-
-Estos ejemplos ilustran la coherencia del modelo; no son datos cargados en una base de datos.
-
-| Caso | Resultado esperado | Motivo |
-| --- | --- | --- |
-| `PR01` tiene 12 unidades en `Z01` y 4 en `Z02`. | Válido; los valores son independientes. | El stock pertenece a la pareja zona–producto. |
-| El stock de `PR01` en `Z01` pasa a 0. | Válido; sigue asignado a esa zona. | El dominio permite cero. |
-| `E01` termina en `V01` el 1 de noviembre a las 09:00 y empieza en `V02` a esa misma hora. | Válido. | Los intervalos son semiabiertos y no se solapan. |
-| `E01` trabaja en `V01` hasta el 1 de noviembre y empieza en `V02` el 25 de octubre. | Inválido. | Hay dos viveros simultáneos para el mismo empleado. |
-| Un cliente ingresó el 15 de septiembre y había realizado un pedido el 10 de septiembre. | El pedido puede conservarse, pero no computa para Plus. | La compra es anterior a su ingreso. |
-| Se asigna un pedido a un puesto que ya había terminado. | Inválido. | El puesto gestor debe estar vigente en la fecha del pedido. |
-| Un pedido contiene dos unidades a 18,50 € y una a 19,00 €. | Total derivado: 56,00 €. | `2 × 18,50 + 1 × 19,00 = 56,00`. |
-| Un cliente tiene pedidos de 56,00 € y 94,00 € en octubre. | Volumen de octubre: 150,00 €. | Se suman las compras del mes. La bonificación no puede deducirse sin su política. |
-| Se registran dos bonificaciones para `C01` y `2026-10`. | Inválido. | Cliente y periodo identifican una única bonificación. |
-| Un empleado alcanza 1.600 € durante un objetivo de 2.000 €. | Cumplimiento: 80 %. | Se comparan ventas y meta del mismo empleado y periodo. |
-| Un empleado tiene una meta mensual y cambia de vivero a mitad del mes. | La meta se conserva; se suman las ventas de sus dos puestos sucesivos. | El objetivo pertenece al empleado, no al puesto. |
-| Un cliente no pertenece a Tajinaste Plus. | Puede realizar pedidos y no recibe bonificaciones del programa. | La especialización es parcial. |
-
-## 6. Correspondencia con el enunciado
-
-| Requisito | Elementos que lo cubren |
-| --- | --- |
-| Red de viveros con zonas | `VIVERO`, `ZONA`, `DISPONE`. |
-| Georreferenciación de viveros y zonas | Latitud y longitud en ambas entidades. |
-| Cantidad de cada producto por zona | `PRODUCTO`, `ALMACENA` y `unidades_disponibles`. |
-| Destinos de empleados que cambian con el tiempo | `EMPLEADO`, `PUESTO`, `EN_ZONA` y fechas históricas. |
-| Nunca dos viveros simultáneos | Restricción temporal 4. |
-| Tarea realizada en una zona | `TAREA`, `DESEMPEÑA` y `EN_ZONA`. |
-| Productividad por zona, empleado y tiempo | Puesto histórico → pedidos → totales; `OBJETIVO_VENTA` se vincula al empleado. |
-| Fidelización según compras mensuales | `CLIENTE`, especialización `CLIENTE_PLUS`, `REALIZA`, `INCLUYE` y `BONIFICACION_MENSUAL`. |
-| Pedidos desde el ingreso | `fecha_ingreso` y restricción temporal 8. |
-| Un responsable por pedido | `GESTIONA` `(1,1)` en pedido y `OCUPA` `(1,1)` en puesto. |
-
-## 7. Decisiones de la revisión
-
-La página principal presenta el modelo completo: **11 entidades, 10 relaciones, una especialización y 37 atributos**, es decir, 59 formas conceptuales sin contar cardinalidades ni anotaciones. Las otras páginas facilitan la lectura, pero no son necesarias para encontrar atributos omitidos de la primera.
+Las otras páginas facilitan la lectura, pero no son necesarias para encontrar atributos omitidos de la primera.
 
 | Decisión | Justificación |
 | --- | --- |
